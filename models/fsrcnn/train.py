@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 
 from log_images import log_images
 from metrics import im_mse, im_psnr, im_ssim
-from model import FSRCNN
+from models.fsrcnn.fsrcnn import FSRCNN
 from models.fsrcnn.dataloader import QuakeDataset
 
 import logging

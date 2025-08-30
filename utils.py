@@ -1,6 +1,8 @@
+import argparse
 import os
-from tqdm import tqdm
+
 import cv2
+from tqdm import tqdm
 
 
 def generate_2x_lr_dataset_color(hr_dir: str, lr_dir: str, scale: int = 2):
@@ -21,3 +23,12 @@ def generate_2x_lr_dataset_color(hr_dir: str, lr_dir: str, scale: int = 2):
         cv2.imwrite(lr_path, lr)
 
     print(f"{len(image_files)} color images processed and saved (2× scale).")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Generate 2x LR color images from HR images.")
+    parser.add_argument("--hr_dir", type=str, required=True, help="Directory containing high-resolution color images.")
+    parser.add_argument("--lr_dir", type=str, required=True, help="Directory to save low-resolution color images.")
+    args = parser.parse_args()
+
+    os.makedirs(args.lr_dir, exist_ok=True)
+    generate_2x_lr_dataset_color(args.hr_dir, args.lr_dir, scale=2)

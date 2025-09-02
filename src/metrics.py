@@ -7,9 +7,23 @@ from skimage.metrics import mean_squared_error, peak_signal_noise_ratio, structu
 
 @dataclass
 class Metrics:
-    mse: float
-    psnr: float
-    ssim: float
+    mse: float = 0.0
+    psnr: float = 0.0
+    ssim: float = 0.0
+
+    def __add__(self, other: "Metrics") -> "Metrics":
+        return Metrics(
+            mse=self.mse + other.mse,
+            psnr=self.psnr + other.psnr,
+            ssim=self.ssim + other.ssim,
+        )
+
+    def __truediv__(self, divisor: float) -> "Metrics":
+        return Metrics(
+            mse=self.mse / divisor,
+            psnr=self.psnr / divisor,
+            ssim=self.ssim / divisor,
+        )
 
 
 def to_numpy_uint8(t: torch.Tensor) -> np.ndarray:

@@ -1,5 +1,8 @@
 import argparse
 import os
+import random
+import shutil
+from pathlib import Path
 
 import cv2
 from tqdm import tqdm
@@ -23,6 +26,31 @@ def generate_2x_lr_dataset_color(hr_dir: str, lr_dir: str, scale: int = 2):
         cv2.imwrite(lr_path, lr)
 
     print(f"{len(image_files)} color images processed and saved (2× scale).")
+
+
+def move_subset(train_hr, train_lr, eval_hr, eval_lr, n_samples=500, seed=42):
+    random.seed(seed)
+
+    hr_files = sorted(os.listdir(train_hr))
+    lr_files = sorted(os.listdir(train_lr))
+
+    assert len(hr_files) == len(lr_files), "HR and LR counts do not match"
+    assert set(hr_files) == set(lr_files), "HR and LR filenames differ"
+
+    subset = random.sample(hr_files, n_samples)
+
+    for fname in subset:
+        src_hr = Path(train_hr) / fname
+        src_lr = Path(train_lr) / fname
+
+        dst_hr = Path(eval_hr) / fname
+        dst_lr = Path(eval_lr) / fname
+
+        shutil.move(str(src_hr), str(dst_hr))
+        shutil.move(str(src_lr), str(dst_lr))
+
+    print(f"Moved {n_samples} pairs from train → eval.")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate 2x LR color images from HR images.")

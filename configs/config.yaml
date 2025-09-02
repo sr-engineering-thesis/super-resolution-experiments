@@ -1,0 +1,59 @@
+debug: True
+
+training:
+  device: 'cuda'
+  scale: 2
+  max_epochs: 100
+  patience: 3
+  optimizer:
+    lr: 1e-4
+    weight_decay: 1e-6
+  scheduler:
+    warmup_steps: 1000
+    gamma: 0.5
+    step_size: 10000
+    
+
+train_dataloader:
+  batch_size: 16
+  shuffle: True
+  num_workers: 4
+  pin_memory: True
+  prefetch_factor: 2
+  persistent_workers: True
+  multiprocessing_context: "spawn"
+
+val_dataloader:
+  batch_size: 16
+  shuffle: False
+  num_workers: 4
+  pin_memory: True
+  prefetch_factor: 2
+  persistent_workers: True
+  multiprocessing_context: "spawn"
+
+test_dataloader:
+  batch_size: 16
+  shuffle: False
+  num_workers: 4
+  pin_memory: True
+  prefetch_factor: 2
+  persistent_workers: True
+  multiprocessing_context: "spawn"
+
+data:
+  train:
+    # x: 'data/train/lr'
+    # y: 'data/train/hr'
+    x: '/mnt/local/data/train/lr'
+    y: '/mnt/local/data/train/hr'
+  test:
+    # x: 'data/test/lr'
+    # y: 'data/test/hr'
+    x: '/mnt/local/data/test/lr'
+    y: '/mnt/local/data/test/hr'
+  val:
+    # x: 'data/val/lr'
+    # y: 'data/val/hr'
+    x: '/mnt/local/data/val/lr'
+    y: '/mnt/local/data/val/hr'

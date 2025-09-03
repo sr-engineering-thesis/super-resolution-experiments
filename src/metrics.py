@@ -47,20 +47,16 @@ def im_ssim(im1: np.ndarray, im2: np.ndarray) -> float:
     Compute SSIM for a single image (C,H,W) or grayscale (1,H,W).
     Assumes values are in [0,1] or already scaled to [0,255].
     """
-
-    # If color image (3,H,W), transpose to HWC
-    if im1.ndim == 3 and im1.shape[0] == 3:
+    # (C,H,W) → transpose to (H,W,C)
+    if im1.ndim == 3 and im1.shape[0] in (1, 3):
         im1 = np.transpose(im1, (1, 2, 0))
         im2 = np.transpose(im2, (1, 2, 0))
+
+    # (H,W,C) color image
+    if im1.ndim == 3 and im1.shape[2] == 3:
         return structural_similarity(im1, im2, channel_axis=-1, data_range=255)
 
-    # If grayscale (1,H,W), squeeze to H,W
-    if im1.ndim == 3 and im1.shape[0] == 1:
-        im1 = im1.squeeze()
-        im2 = im2.squeeze()
-        return structural_similarity(im1, im2, data_range=255)
-
-    # Already 2D
+    # (H,W) grayscale
     if im1.ndim == 2:
         return structural_similarity(im1, im2, data_range=255)
 

@@ -59,4 +59,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     os.makedirs(args.lr_dir, exist_ok=True)
-    generate_2x_lr_dataset_color(args.hr_dir, args.lr_dir, scale=2)
+    generate_2x_lr_dataset_color(args.hr_dir, args.lr_dir, scale=4)

@@ -35,7 +35,7 @@ class Trainer:
         lr, hr = batch
         lr, hr = lr.to(self.device), hr.to(self.device)
 
-        sr = self.model(lr, scale=self.config.training.scale)
+        sr = self.model(lr)
         loss = self.criterion(sr, hr)
 
         self.optimizer.zero_grad()
@@ -48,7 +48,7 @@ class Trainer:
         lr, hr = batch
         lr, hr = lr.to(self.device), hr.to(self.device)
 
-        sr = self.model(lr, scale=self.config.training.scale)
+        sr = self.model(lr)
         loss = self.criterion(sr, hr)
         return loss.item()
 
@@ -66,7 +66,7 @@ class Trainer:
                 if i % 10 == 0:
                     logger.info(f"[Epoch {epoch}/{self.epochs}] Step {i}, Loss: {loss:.7f}")
 
-                    sr_batch = self.model(batch[0].to(self.device), scale=self.config.training.scale)
+                    sr_batch = self.model(batch[0].to(self.device))
                     metrics: Metrics = batch_metrics(sr_batch, batch[1].to(self.device))
 
                     epoch_train_metrics += metrics
@@ -98,7 +98,7 @@ class Trainer:
                     if j % 10 == 0:
                         logger.info(f"[Epoch {epoch}/{self.epochs}] Val Step {j}, Loss: {loss:.7f}")
 
-                        sr_batch = self.model(batch[0].to(self.device), scale=self.config.training.scale)
+                        sr_batch = self.model(batch[0].to(self.device))
                         metrics: Metrics = batch_metrics(sr_batch, batch[1].to(self.device))
 
                         epoch_val_metrics += metrics

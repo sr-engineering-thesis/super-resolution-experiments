@@ -11,11 +11,13 @@ def to_tensor(img):
 
 
 class QuakeDataset(torch.utils.data.Dataset):
-    def __init__(self, config: DictConfig, split: str = "train", patch_size: int = 128):
+    def __init__(self, config: DictConfig, split: str = "train", patch_size: int = 64):
         super().__init__()
         self.lr_dir = config.data[split].x
         self.hr_dir = config.data[split].y
         self.patch_size = patch_size
+        self.config = config
+        self.scale = config.training.scale
 
         self.image_list = sorted(
             [f for f in os.listdir(self.hr_dir) if f.endswith(".png") and os.path.exists(os.path.join(self.lr_dir, f))]
@@ -39,6 +41,10 @@ class QuakeDataset(torch.utils.data.Dataset):
         top = torch.randint(0, H - ps, (1,)).item()
         left = torch.randint(0, W - ps, (1,)).item()
         lr_crop = lr_tensor[:, top : top + ps, left : left + ps]
-        hr_crop = hr_tensor[:, top * 2 : top * 2 + ps * 2, left * 2 : left * 2 + ps * 2]
+        hr_crop = hr_tensor[
+            :,
+            top * self.scale : top * self.scale + ps * self.scale,
+            left * self.scale : left * self.scale + ps * self.scale
+        ]
 
         return lr_crop, hr_crop

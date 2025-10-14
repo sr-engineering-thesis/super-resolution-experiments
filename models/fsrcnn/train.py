@@ -1,3 +1,6 @@
+import hashlib
+import logging
+import time
 from dataclasses import dataclass
 
 import aim
@@ -5,16 +8,11 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 
+from constants import CHECKPOINTS_DIR_PATH
 from log_images import log_images
 from metrics import im_mse, im_psnr, im_ssim
-from models.fsrcnn.fsrcnn import FSRCNN
 from models.fsrcnn.dataloader import QuakeDataset
-
-import logging
-import hashlib
-from constants import CHECKPOINTS_DIR_PATH
-import time
-
+from models.fsrcnn.fsrcnn import FSRCNN
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"

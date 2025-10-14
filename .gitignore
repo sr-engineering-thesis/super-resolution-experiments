@@ -16,4 +16,4 @@ checkpoints/
 results/
 slurm*
 logs/
-
+plots/

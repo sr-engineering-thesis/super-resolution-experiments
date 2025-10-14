@@ -4,9 +4,9 @@ training:
   device: 'cuda'
   scale: 2
   max_epochs: 100
-  patience: 3
+  patience: 5
   optimizer:
-    lr: 1e-4
+    lr: 3e-4
     weight_decay: 1e-6
   scheduler:
     warmup_steps: 1000
@@ -17,7 +17,7 @@ training:
 train_dataloader:
   batch_size: 16
   shuffle: True
-  num_workers: 4
+  num_workers: 16
   pin_memory: True
   prefetch_factor: 2
   persistent_workers: True
@@ -26,7 +26,7 @@ train_dataloader:
 val_dataloader:
   batch_size: 16
   shuffle: False
-  num_workers: 4
+  num_workers: 16
   pin_memory: True
   prefetch_factor: 2
   persistent_workers: True
@@ -35,7 +35,7 @@ val_dataloader:
 test_dataloader:
   batch_size: 16
   shuffle: False
-  num_workers: 4
+  num_workers: 16
   pin_memory: True
   prefetch_factor: 2
   persistent_workers: True
@@ -43,17 +43,18 @@ test_dataloader:
 
 data:
   train:
-    # x: 'data/train/lr'
-    # y: 'data/train/hr'
-    x: '/mnt/local/data/train/lr'
-    y: '/mnt/local/data/train/hr'
+    x: '/mnt/local/rs/train/lr'
+    x_4x: '/mnt/local/rs/train/lr_4x'
+    y: '/mnt/local/rs/train/hr'
   test:
-    # x: 'data/test/lr'
-    # y: 'data/test/hr'
-    x: '/mnt/local/data/test/lr'
-    y: '/mnt/local/data/test/hr'
+    x: '/mnt/local/rs/test/lr'
+    x_4x: '/mnt/local/rs/test/lr_4x'
+    y: '/mnt/local/rs/test/hr'
   val:
-    # x: 'data/val/lr'
-    # y: 'data/val/hr'
-    x: '/mnt/local/data/val/lr'
-    y: '/mnt/local/data/val/hr'
+    x: '/mnt/local/rs/val/lr'
+    x_4x: '/mnt/local/rs/val/lr_4x'
+    y: '/mnt/local/rs/val/hr'
+
+
+plotting:
+  dir: 'plots'

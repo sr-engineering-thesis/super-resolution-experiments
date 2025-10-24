@@ -11,11 +11,11 @@ def to_tensor(img):
 
 
 class QuakeDataset(torch.utils.data.Dataset):
-    def __init__(self, config: DictConfig, split: str = "train", patch_size: int = 64):
+    def __init__(self, config: DictConfig, split: str = "train"):
         super().__init__()
         self.lr_dir = config.data[split].x
         self.hr_dir = config.data[split].y
-        self.patch_size = patch_size
+        self.patch_size = config.data.patch_size
         self.config = config
         self.scale = config.training.scale
 

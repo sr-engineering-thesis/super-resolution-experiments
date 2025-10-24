@@ -2,20 +2,25 @@ debug: True
 
 training:
   device: 'cuda'
-  scale: 2
-  max_epochs: 100
-  patience: 5
+  scale: 4
+  max_epochs: 200
+  patience: 15
   optimizer:
     lr: 3e-4
-    weight_decay: 1e-6
+    weight_decay: 1e-4
+  # scheduler:
+  #   warmup_steps: 1000
+  #   gamma: 0.5
+  #   step_size: 10000
   scheduler:
-    warmup_steps: 1000
-    gamma: 0.5
-    step_size: 10000
+    type: 'cosine_warm_restarts'
+    T_0: 10
+    T_mult: 2
+    eta_min: 1e-7
     
 
 train_dataloader:
-  batch_size: 16
+  batch_size: 32
   shuffle: True
   num_workers: 16
   pin_memory: True
@@ -24,7 +29,7 @@ train_dataloader:
   multiprocessing_context: "spawn"
 
 val_dataloader:
-  batch_size: 16
+  batch_size: 32
   shuffle: False
   num_workers: 16
   pin_memory: True
@@ -42,17 +47,15 @@ test_dataloader:
   multiprocessing_context: "spawn"
 
 data:
+  patch_size: 64
   train:
-    x: '/mnt/local/rs/train/lr'
-    x_4x: '/mnt/local/rs/train/lr_4x'
+    x: '/mnt/local/rs/train/lr_x4'
     y: '/mnt/local/rs/train/hr'
   test:
-    x: '/mnt/local/rs/test/lr'
-    x_4x: '/mnt/local/rs/test/lr_4x'
+    x: '/mnt/local/rs/test/lr_x4'
     y: '/mnt/local/rs/test/hr'
   val:
-    x: '/mnt/local/rs/val/lr'
-    x_4x: '/mnt/local/rs/val/lr_4x'
+    x: '/mnt/local/rs/val/lr_x4'
     y: '/mnt/local/rs/val/hr'
 
 

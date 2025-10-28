@@ -27,10 +27,22 @@ class VGGFeatureExtractor(nn.Module):
 
         self.vgg_layers = nn.ModuleDict()
         layer_map = {
-            "relu1_1": 1, "relu1_2": 3, "relu2_1": 6, "relu2_2": 8,
-            "relu3_1": 11, "relu3_2": 13, "relu3_3": 15, "relu3_4": 17,
-            "relu4_1": 20, "relu4_2": 22, "relu4_3": 24, "relu4_4": 26,
-            "relu5_1": 29, "relu5_2": 31, "relu5_3": 33, "relu5_4": 35,
+            "relu1_1": 1,
+            "relu1_2": 3,
+            "relu2_1": 6,
+            "relu2_2": 8,
+            "relu3_1": 11,
+            "relu3_2": 13,
+            "relu3_3": 15,
+            "relu3_4": 17,
+            "relu4_1": 20,
+            "relu4_2": 22,
+            "relu4_3": 24,
+            "relu4_4": 26,
+            "relu5_1": 29,
+            "relu5_2": 31,
+            "relu5_3": 33,
+            "relu5_4": 35,
         }
 
         for name in layers:
@@ -46,15 +58,6 @@ class VGGFeatureExtractor(nn.Module):
         return features
 
 
-class CharbonnierLoss(nn.Module):
-    def __init__(self, eps=1e-3):
-        super().__init__()
-        self.eps = eps
-
-    def forward(self, pred, target):
-        return torch.mean(torch.sqrt((pred - target) ** 2 + self.eps**2))
-
-
 class Trainer:
     def __init__(
         self,
@@ -62,7 +65,7 @@ class Trainer:
         train_loader: DataLoader,
         val_loader: DataLoader,
         config: DictConfig,
-        experiment_tracker=None,  # Aim run
+        experiment_tracker=None,
     ):
         self.device = config.training.device
         self.model = model.to(self.device)
@@ -71,18 +74,16 @@ class Trainer:
         self.config = config
         self.experiment_tracker = experiment_tracker
 
-        self.criterion = CharbonnierLoss()
-        self.vgg_criterion = nn.L1Loss()
-        self.vgg_extractor = VGGFeatureExtractor(layers=("relu3_3",)).to(self.device)
+        self.criterion = nn.L1Loss()
+        # self.vgg_criterion = nn.L1Loss()
+        # self.vgg_extractor = VGGFeatureExtractor(layers=("relu3_3",)).to(self.device)
 
         self.optimizer = optim.AdamW(
             self.model.parameters(),
             lr=config.training.optimizer.lr,
             weight_decay=config.training.optimizer.weight_decay,
         )
-        self.scheduler = CosineAnnealingWarmRestarts(
-            self.optimizer, T_0=10, T_mult=2, eta_min=1e-7
-        )
+        # self.scheduler = CosineAnnealingWarmRestarts(self.optimizer, T_0=10, T_mult=2, eta_min=1e-7)
 
         self.epochs = config.training.max_epochs
         self.patience = config.training.patience
@@ -96,11 +97,14 @@ class Trainer:
         sr = self.model(lr)
         loss_pixel = self.criterion(sr, hr)
 
-        sr_features = self.vgg_extractor(sr)
-        hr_features = self.vgg_extractor(hr)
-        loss_vgg = sum(self.vgg_criterion(sr_features[k], hr_features[k]) for k in sr_features)
+        # sr_features = self.vgg_extractor(sr)
+        # hr_features = self.vgg_extractor(hr)
+        # loss_vgg = sum(self.vgg_criterion(sr_features[k], hr_features[k]) for k in sr_features)
 
-        total_loss = loss_pixel + 0.21 * loss_vgg
+        # total_loss = loss_pixel + 0.21 * loss_vgg
+        total_loss = loss_pixel
+        # abs(sobel_hr - sobel_pred) * 0.5  
+        # total_loss = loss + loss_sobel
         self.optimizer.zero_grad()
         total_loss.backward()
         self.optimizer.step()
@@ -202,11 +206,9 @@ class Trainer:
                 self.experiment_tracker.track(avg_val_metrics.psnr, name="val/avg_psnr", epoch=epoch)
                 self.experiment_tracker.track(avg_val_metrics.ssim, name="val/avg_ssim", epoch=epoch)
 
-            # Scheduler step
-            self.scheduler.step()
-            # inside the epoch loop, after scheduler.step()
+            # self.scheduler.step()
             for i, param_group in enumerate(self.optimizer.param_groups):
-                lr = param_group['lr']
+                lr = param_group["lr"]
                 logger.info(f"Epoch {epoch} - Optimizer group {i} LR: {lr:.6f}")
                 if self.experiment_tracker is not None:
                     self.experiment_tracker.track(lr, name=f"optimizer/lr_group_{i}", epoch=epoch)

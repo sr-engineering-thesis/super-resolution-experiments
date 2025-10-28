@@ -5,7 +5,12 @@ import shutil
 from pathlib import Path
 
 import cv2
+import numpy as np
+import torch
 from tqdm import tqdm
+
+
+
 
 
 def generate_2x_lr_dataset_color(hr_dir: str, lr_dir: str, scale: int = 2):
@@ -25,7 +30,7 @@ def generate_2x_lr_dataset_color(hr_dir: str, lr_dir: str, scale: int = 2):
         lr = cv2.resize(hr_img, (w // scale, h // scale), interpolation=cv2.INTER_CUBIC)
         cv2.imwrite(lr_path, lr)
 
-    print(f"{len(image_files)} color images processed and saved (2× scale).")
+    print(f"{len(image_files)} color images processed and saved ({scale}× scale).")
 
 
 def move_subset(train_hr, train_lr, eval_hr, eval_lr, n_samples=500, seed=42):
@@ -59,4 +64,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     os.makedirs(args.lr_dir, exist_ok=True)
-    generate_2x_lr_dataset_color(args.hr_dir, args.lr_dir, scale=4)
+    generate_2x_lr_dataset_color(args.hr_dir, args.lr_dir, scale=3)

@@ -128,25 +128,28 @@ class SRVisualizer:
         - First patch: HR image (normal)
         - Then diff maps for each model vs HR
         """
-        # Compute global max for normalization of diffs
-        all_diffs = [np.abs(hr_patch.astype(np.float32) - p.astype(np.float32)) for p in lr_patches.values()]
+        hr_gray = cv2.cvtColor(hr_patch, cv2.COLOR_BGR2GRAY)
+
+        all_diffs = [
+            np.abs(hr_gray.astype(np.float32) - cv2.cvtColor(p.astype(np.uint8), cv2.COLOR_BGR2GRAY).astype(np.float32))
+            for p in lr_patches.values()
+        ]
         global_max_diff = max(d.max() for d in all_diffs)
 
         diff_patches = []
 
-        for i, (name, patch) in enumerate(lr_patches.items()):
+        for name, patch in lr_patches.items():
             if name == "HR (Ground Truth)":
-                # Keep HR normal
                 patch_resized = cv2.resize(
                     patch,
                     (patch.shape[1] * self.scale_factor, patch.shape[0] * self.scale_factor),
                     interpolation=cv2.INTER_NEAREST,
                 )
             else:
-                # Diff map
-                diff = np.abs(hr_patch.astype(np.float32) - patch.astype(np.float32))
+                patch_gray = cv2.cvtColor(patch.astype(np.uint8), cv2.COLOR_BGR2GRAY)
+                diff = np.abs(hr_gray.astype(np.float32) - patch_gray.astype(np.float32))
                 diff_norm = (diff / global_max_diff * 255.0).clip(0, 255).astype(np.uint8)
-                patch_resized = cv2.applyColorMap(diff_norm.max(axis=2), cv2.COLORMAP_JET)
+                patch_resized = cv2.applyColorMap(diff_norm, cv2.COLORMAP_JET)
                 patch_resized = cv2.resize(
                     patch_resized,
                     (patch_resized.shape[1] * self.scale_factor, patch_resized.shape[0] * self.scale_factor),

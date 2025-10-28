@@ -1,55 +1,15 @@
 import glob
 import os
-from time import monotonic_ns
 
 import cv2
 import numpy as np
 import torch
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
-from torchsr.models import carn
 
-from models.fsrcnn.fsrcnn import FSRCNN_BIG_PRETRAIN, FSRCNN_SMALL_PRETRAIN, FSRCNN_WITHOUT_PRETRAIN
-from src.metrics import im_mse, im_psnr, im_ssim
+from models.models import ModelConfig, ModelFactory, SRModelWrapper
+from src.metrics import im_psnr, im_ssim
 from src.visualizer import SRVisualizer
-
-os.makedirs("results", exist_ok=True)
-
-MODEL_REGISTRY = {
-    "fsrcnn_finetuned": {
-        "class": FSRCNN_WITHOUT_PRETRAIN,
-        "ckpt": "checkpoints/fsrcnn_finetuned.pth",
-    },
-    "fsrcnn_small_pretrained": {
-        "class": FSRCNN_SMALL_PRETRAIN,
-        "ckpt": "checkpoints/fsrcnn_finetuned_0.0051799.pth",
-    },
-    "fsrcnn_big_pretrained": {
-        "class": FSRCNN_BIG_PRETRAIN,
-        "ckpt": "checkpoints/fsrcnn_finetuned_0.0036803.pth",
-    },
-    "carn": {
-        "class": carn,
-        "ckpt": "checkpoints/carn_finetuned.pth",
-    },
-}
-
-def load_model(model_name, device, scale=2):
-    info = MODEL_REGISTRY[model_name]
-    model_cls = info["class"]
-    ckpt_path = info["ckpt"]
-
-    if model_cls is carn:
-        model = model_cls(scale=scale, pretrained=True).to(device)
-    else:
-        model = model_cls(scale=scale).to(device)
-
-    state_dict = torch.load(ckpt_path, map_location=device)
-    model.load_state_dict(state_dict)
-    model.eval()
-    return model
-
-MODELS = {name: (lambda n=name: (lambda device: load_model(n, device)))() for name in MODEL_REGISTRY}
 
 
 def to_tensor(img):
@@ -71,14 +31,10 @@ class SRDataset(torch.utils.data.Dataset):
         lr_img = cv2.imread(self.lr_paths[idx])
         return to_tensor(lr_img), to_tensor(hr_img)
 
-def model_infer(lr_tensor, model, precision):
-    with torch.no_grad():
-        with torch.autocast(device_type="cuda", dtype=precision):
-            return model(lr_tensor)
 
-def benchmark(model, dataloader, device, precision=torch.float32):
-    times = []
-    total_mse, total_psnr, total_ssim = 0.0, 0.0, 0.0
+def benchmark(model: SRModelWrapper, dataloader: DataLoader, device: torch.device):
+    """Benchmark a model on a dataset."""
+    mse_list, psnr_list, ssim_list = [], [], []
     total_images = 0
 
     with torch.no_grad():
@@ -86,15 +42,7 @@ def benchmark(model, dataloader, device, precision=torch.float32):
             lr_tensor = lr_tensor.to(device)
             hr_tensor = hr_tensor.to(device)
 
-            torch.cuda.synchronize()
-            start_ns = monotonic_ns()
-
-            with torch.autocast(device_type="cuda", dtype=precision):
-                output = model(lr_tensor)
-
-            torch.cuda.synchronize()
-            end_ns = monotonic_ns()
-            times.append((end_ns - start_ns) / 1e6)
+            output = model(lr_tensor)
 
             output_np = output.squeeze().cpu().float().numpy()
             output_np = (np.transpose(output_np, (1, 2, 0)) * 255.0).clip(0, 255).astype(np.uint8)
@@ -102,59 +50,172 @@ def benchmark(model, dataloader, device, precision=torch.float32):
             hr_np = hr_tensor.squeeze().cpu().numpy()
             hr_np = (np.transpose(hr_np, (1, 2, 0)) * 255.0).clip(0, 255).astype(np.uint8)
 
-            mse = im_mse(hr_np, output_np)
-            psnr = im_psnr(hr_np, output_np)
-            ssim = im_ssim(hr_np, output_np)
-
-            total_mse += mse
-            total_psnr += psnr
-            total_ssim += ssim
+            mse_list.append(np.mean((hr_np - output_np) ** 2))
+            psnr_list.append(im_psnr(hr_np, output_np))
+            ssim_list.append(im_ssim(hr_np, output_np))
             total_images += 1
 
-    times_np = np.array(times)[5:]
-    avg_time, std_time = np.mean(times_np), np.std(times_np)
+    mse_std = np.std(mse_list)
+    psnr_std = np.std(psnr_list)
+    ssim_std = np.std(ssim_list)
 
-    avg_metrics = {
-        "mse": total_mse / total_images,
-        "psnr": total_psnr / total_images,
-        "ssim": total_ssim / total_images,
+    return {
+        "mse": np.sum(mse_list) / total_images,
+        "psnr": np.sum(psnr_list) / total_images,
+        "ssim": np.sum(ssim_list) / total_images,
+        "mse_std": mse_std,
+        "psnr_std": psnr_std,
+        "ssim_std": ssim_std,
     }
-    return avg_time, std_time, avg_metrics
 
 
 if __name__ == "__main__":
     print("Starting benchmark...")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    precisions = {"fp32": torch.float32, "fp16": torch.float16, "bf16": torch.bfloat16}
 
     config = OmegaConf.load("configs/config.yaml")
     visualizer = SRVisualizer(config)
 
-    dataset = SRDataset(config.data.test.y, config.data.test.x) # y -> HR, x -> LR
+    dataset = SRDataset(config.data.test.y, config.data.test.x)
     dataloader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=4)
 
-    for model_name, loader in MODELS.items():
-        print(f"\n=== Processing model: {model_name} ===")
-        base_model = loader(device)
-        base_model.eval()
+    model_configs = [
+        # ModelConfig(
+        #     name="fsrcnn_without", scale=2, precision=torch.float32, checkpoint="checkpoints/fsrcnn_finetuned.pth"
+        # ),
+        # ModelConfig(
+        #     name="fsrcnn_without", scale=2, precision=torch.float16, checkpoint="checkpoints/fsrcnn_finetuned.pth"
+        # ),
+        # ModelConfig(
+        #     name="fsrcnn_without", scale=2, precision=torch.bfloat16, checkpoint="checkpoints/fsrcnn_finetuned.pth"
+        # ),
+        # ModelConfig(
+        #     name="fsrcnn_small",
+        #     scale=2,
+        #     precision=torch.float32,
+        #     checkpoint="checkpoints/fsrcnn_finetuned_0.0051799.pth",
+        # ),
+        # ModelConfig(
+        #     name="fsrcnn_small",
+        #     scale=2,
+        #     precision=torch.float16,
+        #     checkpoint="checkpoints/fsrcnn_finetuned_0.0051799.pth",
+        # ),
+        # ModelConfig(
+        #     name="fsrcnn_small",
+        #     scale=2,
+        #     precision=torch.bfloat16,
+        #     checkpoint="checkpoints/fsrcnn_finetuned_0.0051799.pth",
+        # ),
+        # ModelConfig(
+        #     name="fsrcnn_big", scale=2, precision=torch.float32, checkpoint="checkpoints/fsrcnn_finetuned_0.0036803.pth"
+        # ),
+        # ModelConfig(
+        #     name="fsrcnn_big", scale=2, precision=torch.float16, checkpoint="checkpoints/fsrcnn_finetuned_0.0036803.pth"
+        # ),
+        # ModelConfig(
+        #     name="fsrcnn_big",
+        #     scale=2,
+        #     precision=torch.bfloat16,
+        #     checkpoint="checkpoints/fsrcnn_finetuned_0.0036803.pth",
+        # ),
+        ModelConfig(name="ninasr_b0", scale=2, precision=torch.float32, checkpoint="checkpoints/ninasr_finetuned.pth"),
+        ModelConfig(name="ninasr_b0", scale=2, precision=torch.float16, checkpoint="checkpoints/ninasr_finetuned.pth"),
+        ModelConfig(name="ninasr_b0", scale=2, precision=torch.bfloat16, checkpoint="checkpoints/ninasr_finetuned.pth"),
+        # ModelConfig(
+        #     name="carn_finetuned", scale=2, precision=torch.float32, checkpoint="checkpoints/carn_finetuned.pth"
+        # ),
+        # ModelConfig(
+        #     name="carn_finetuned", scale=2, precision=torch.float16, checkpoint="checkpoints/carn_finetuned.pth"
+        # ),
+        # ModelConfig(
+        #     name="carn_finetuned", scale=2, precision=torch.bfloat16, checkpoint="checkpoints/carn_finetuned.pth"
+        # ),
+        # ModelConfig(name="bilinear", scale=2),
+        # ModelConfig(name="bicubic", scale=2),
+        # ModelConfig(name="bilinear", scale=4),
+        # ModelConfig(name="bicubic", scale=4),
+        # ModelConfig(name="bilinear_torch", scale=4, precision=torch.float32),
+        # ModelConfig(name="bilinear", scale=4, precision=torch.float32),
+        # ModelConfig(name="bicubic_torch", scale=4, precision=torch.float32),
+        # ModelConfig(name="bicubic", scale=4, precision=torch.float32),
+        # ModelConfig(
+        #     name="ninasr_b0", scale=4, precision=torch.float32, checkpoint="checkpoints/ninasr4x_best_first.pth"
+        # ),
+        # ModelConfig(
+        #     name="ninasr_b0", scale=4, precision=torch.float16, checkpoint="checkpoints/ninasr4x_best_first.pth"
+        # ),
+        # ModelConfig(
+        #     name="ninasr_b0", scale=4, precision=torch.bfloat16, checkpoint="checkpoints/ninasr4x_best_first.pth"
+        # ),
+        # ModelConfig(
+        #     name="fsrcnn_big", scale=4, precision=torch.float32, checkpoint="checkpoints/fsrcnn4x_best_first.pth"
+        # ),
+        # ModelConfig(
+        #     name="fsrcnn_big", scale=4, precision=torch.float16, checkpoint="checkpoints/fsrcnn4x_best_first.pth"
+        # ),
+        # ModelConfig(
+        #     name="fsrcnn_big", scale=4, precision=torch.bfloat16, checkpoint="checkpoints/fsrcnn4x_best_first.pth"
+        # ),
+        # ModelConfig(name="bilinear_torch", scale=2, precision=torch.float16),
+        # ModelConfig(name="bilinear_torch", scale=2, precision=torch.bfloat16),
+        # ModelConfig(name="bicubic_torch", scale=2, precision=torch.float32),
+        # ModelConfig(name="bicubic_torch", scale=2, precision=torch.float16),
+        # ModelConfig(name="bicubic_torch", scale=2, precision=torch.bfloat16),
+        # ModelConfig(name="bilinear_torch", scale=4, precision=torch.float32),
+        # ModelConfig(name="bilinear_torch", scale=4, precision=torch.float16),
+        # ModelConfig(name="bilinear_torch", scale=4, precision=torch.bfloat16),
+        # ModelConfig(name="bicubic_torch", scale=4, precision=torch.float32),
+        # ModelConfig(name="bicubic_torch", scale=4, precision=torch.float16),
+        # ModelConfig(name="bicubic_torch", scale=4, precision=torch.bfloat16),
+        # ModelConfig(name="fsrcnn_big", scale=2, precision=torch.float32, checkpoint="checkpoints/fsrcnn_finetuned_0.0036803.pth"),
+        # ModelConfig(name="fsrcnn_small", scale=2, precision=torch.float32, checkpoint="checkpoints/fsrcnn_finetuned_0.0051799.pth"),
+        # ModelConfig(name="fsrcnn_without", scale=2, precision=torch.float32, checkpoint="checkpoints/fsrcnn_finetuned.pth"),
+        # ModelConfig(name="fsrcnn_big", scale=2, precision=torch.float16, checkpoint="checkpoints/fsrcnn_finetuned_0.0036803.pth"),
+        # ModelConfig(name="fsrcnn_small", scale=2, precision=torch.float16, checkpoint="checkpoints/fsrcnn_finetuned_0.0051799.pth"),
+        # ModelConfig(name="fsrcnn_without", scale=2, precision=torch.float16, checkpoint="checkpoints/fsrcnn_finetuned.pth"),
+        # ModelConfig(name="fsrcnn_big", scale=2, precision=torch.bfloat16, checkpoint="checkpoints/fsrcnn_finetuned_0.0036803.pth"),
+        # ModelConfig(name="fsrcnn_small", scale=2, precision=torch.bfloat16, checkpoint="checkpoints/fsrcnn_finetuned_0.0051799.pth"),
+        # ModelConfig(name="fsrcnn_without", scale=2, precision=torch.bfloat16, checkpoint="checkpoints/fsrcnn_finetuned.pth"),
+        # ModelConfig(name="fsrcnn_big", scale=2, checkpoint="checkpoints/FSRCNN-x2.pt"),
+        # ModelConfig(name="ninasr_b0", scale=2, precision=torch.float32),
+        # ModelConfig(name="fsrcnn_big", scale=2, precision=torch.float32, checkpoint="checkpoints/FSRCNN-x2.pt"),
+        # ModelConfig(name="edsr_r32f256", scale=2, precision=torch.float32, checkpoint=None),
+        # ModelConfig(name="carn_m", scale=2, precision=torch.float32, checkpoint=None),
+        # ModelConfig(name="edsr_r16f64", scale=2, precision=torch.float32, checkpoint=None),
+        # ModelConfig(name="rcan", scale=2, precision=torch.float32, checkpoint=None),
+        # ModelConfig(name="carn", scale=2, precision=torch.float32, checkpoint=None),
+        # ModelConfig(name="carn_finetuned", scale=2, precision=torch.float32, checkpoint="checkpoints/carn_finetuned.pth"),
+        # ModelConfig(name="ninasr_b0", scale=2, precision=torch.float32, checkpoint="checkpoints/ninasr_finetuned.pth")
+        # ModelConfig(
+        #     name="ninasr_julia",
+        #     scale=2,
+        #     precision=torch.float16,
+        #     checkpoint="checkpoints/best_model_20251026_205928.pth",
+        # ),
+        # ModelConfig(name="ninasr_b0", scale=2, precision=torch.float32, checkpoint=None),
+        # ModelConfig(name="ninasr_b0", scale=2, precision=torch.float16, checkpoint=None),
+        # ModelConfig(name="ninasr_b0", scale=2, precision=torch.bfloat16, checkpoint=None),
+    ]
 
-        models_for_plot = []
-        model_labels = []
+    # Create models
+    models = [ModelFactory.create(cfg, device) for cfg in model_configs]
+    model_names = [cfg.name for cfg in model_configs]
 
-        for precision_label, precision in precisions.items():
-            model = base_model
-            model.eval()
-
-            models_for_plot.append(lambda lr_tensor, m=model, p=precision: model_infer(lr_tensor, m, p))
-            model_labels.append(f"{model_name}_{precision_label}")
-
-            avg_time, std_time, avg_metrics = benchmark(model, dataloader, device, precision=precision)
-            print(f"{precision_label.upper()} inference: {avg_time:.4f} ± {std_time:.4f} ms")
-            print(
-                f"Avg Metrics: MSE: {avg_metrics['mse']}, PSNR: {avg_metrics['psnr']}, SSIM: {avg_metrics['ssim']}"
-            )
-
-        gt_patch, pred_patches, pred_metrics = visualizer.run_models(models_for_plot)
-        visualizer.plot_results(
-            gt_patch, pred_patches, pred_metrics, model_labels, out_prefix=f"{model_name}_comparison"
+    print("\n=== Benchmark Results ===")
+    for cfg, model in zip(model_configs, models):
+        results = benchmark(
+            model,
+            dataloader,
+            device,
         )
+        print(cfg)
+        print(f"{cfg.name}: | MSE: {results['mse']:.4f}, PSNR: {results['psnr']:.4f}, SSIM: {results['ssim']:.4f}")
+        print(
+            f"{cfg.name}: | MSE std: {results['mse_std']:.4f}, PSNR std: {results['psnr_std']:.4f}, SSIM std: {results['ssim_std']:.4f}\n"
+        )
+
+    # print("\n=== Generating Visual Comparison ===")
+    # gt_patch, pred_patches, pred_metrics = visualizer.run_models(models)
+
+    # visualizer.plot_results(gt_patch, pred_patches, pred_metrics, model_names, out_prefix="comparison_2x")

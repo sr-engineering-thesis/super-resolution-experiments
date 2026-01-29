@@ -174,10 +174,6 @@ class SRVisualizer:
         hr_tensor = self.to_tensor(hr_image)
         hr_np = (hr_tensor.numpy() * 255.0).clip(0, 255).astype(np.uint8)
         hr_np = np.transpose(hr_np, (1, 2, 0))
-        gt_patch = hr_np[
-            self.crop_coords[1] : self.crop_coords[1] + 128,
-            self.crop_coords[0] : self.crop_coords[0] + 128,
-        ]
         img_lr = self.to_tensor(lr_image).unsqueeze(0).to(self.device)
 
         pred_patches = []

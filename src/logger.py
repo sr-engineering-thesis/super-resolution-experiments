@@ -20,6 +20,7 @@ def setup_logger(name: str, level=logging.DEBUG) -> logging.Logger:
 
 logger = setup_logger(__name__)
 
+
 def setup_aim_logger(name: str, config: DictConfig) -> Run:
     import aim
 
@@ -27,9 +28,7 @@ def setup_aim_logger(name: str, config: DictConfig) -> Run:
         experiment=name,
         repo="aim://server.aim.mjanicki.org:53800",
     )
-    experiment_tracker['config'] = config
+    experiment_tracker["config"] = config
     logger.info(f"Aim Run Hash: {experiment_tracker.hash}")
 
     return experiment_tracker
-
-

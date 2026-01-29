@@ -30,7 +30,6 @@ class Trainer:
         self.config = config
         self.experiment_tracker = experiment_tracker
         self.run_dir = run_dir
-        # self.initial_loss = config.training.loss_scales.get(config.training.loss, 1.0)
         self.initial_loss = None
         os.makedirs(self.run_dir, exist_ok=True)
 
@@ -89,12 +88,6 @@ class Trainer:
 
         sr = self.model(lr)
         loss_pixel = self.criterion(sr, hr)
-
-        # if self.initial_loss is None:
-        #     logger.info(f"Setting initial loss scale for {self.config.training.loss} loss: {self.config.training.loss_scales[self.config.training.loss]}")
-        #     self.initial_loss = self.config.training.loss_scales[self.config.training.loss]
-
-        # loss_pixel = loss_pixel / self.initial_loss
 
         self.optimizer.zero_grad()
         loss_pixel.backward()

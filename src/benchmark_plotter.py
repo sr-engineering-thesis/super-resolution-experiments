@@ -5,26 +5,27 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 MODEL_NAMES_MAP = {
-    'ninasr_b0': 'NinaSR B0',
-    'rcan': 'RCAN',
-    'carn': 'CARN',
-    'carn_m': 'CARN_M',
-    'edsr_r16f64': 'EDSR_r16f64',
-    'edsr_r32f256': 'EDSR_r32f256',
-    'nearest_torch': 'Nearest Neighbor',
-    'bilinear_torch': 'Bilinear',
-    'bicubic_torch': 'Bicubic',
-    'lanczos': 'Lanczos',
-    'fsrcnn_big': 'FSRCNN-B',
-    'fsrcnn_small': 'FSRCNN-S',
-    'fsrcnn_without': 'FSRCNN',
-    'ninasr_julia': r'NinaSR_SM',
-    'fsrcnn_big_vgg': 'Perceptual Loss',
-    'fsrcnn_big_fourier': 'Fourier Loss',
-    'fsrcnn_big_sobel': 'Sobel Loss',
-    'fsrcnn_big_mse': 'MSE',
-    'fsrcnn_big_mae': 'MAE',
+    "ninasr_b0": "NinaSR B0",
+    "rcan": "RCAN",
+    "carn": "CARN",
+    "carn_m": "CARN_M",
+    "edsr_r16f64": "EDSR_r16f64",
+    "edsr_r32f256": "EDSR_r32f256",
+    "nearest_torch": "Nearest Neighbor",
+    "bilinear_torch": "Bilinear",
+    "bicubic_torch": "Bicubic",
+    "lanczos": "Lanczos",
+    "fsrcnn_big": "FSRCNN-B",
+    "fsrcnn_small": "FSRCNN-S",
+    "fsrcnn_without": "FSRCNN",
+    "ninasr_julia": r"NinaSR_SM",
+    "fsrcnn_big_vgg": "Perceptual Loss",
+    "fsrcnn_big_fourier": "Fourier Loss",
+    "fsrcnn_big_sobel": "Sobel Loss",
+    "fsrcnn_big_mse": "MSE",
+    "fsrcnn_big_mae": "MAE",
 }
+
 
 @dataclass
 class PatchInfo:
@@ -32,6 +33,7 @@ class PatchInfo:
     patch_y: int
     offset_x: int
     image_idx: int
+
 
 class BenchmarkPlotter:
     def __init__(self, model_names, pred_metrics, pred_precisions, patch_info: PatchInfo):
@@ -41,12 +43,12 @@ class BenchmarkPlotter:
         self.header_height = 120
         self.patch_crop_w = 1440
         self.patch_crop_h = 1440
-        
+
         self.patch_x = patch_info.patch_x
         self.patch_y = patch_info.patch_y
         self.offset_x = patch_info.offset_x
         self.patch_size = 128
-        
+
         self.header_height = 160
         self.text_px = self.header_height
         self.text_px_small = self.header_height // 2 - 9
@@ -60,8 +62,8 @@ class BenchmarkPlotter:
             height = self.text_px
 
         fig = plt.figure(figsize=(8, 1), dpi=200)
-        plt.text(0.5, 0.5, text, fontsize=50, ha='center', va='center', color='black')
-        plt.axis('off')
+        plt.text(0.5, 0.5, text, fontsize=50, ha="center", va="center", color="black")
+        plt.axis("off")
         fig.patch.set_alpha(0.0)
         fig.canvas.draw()
 
@@ -83,55 +85,25 @@ class BenchmarkPlotter:
 
         name_tex = self.latex_rgba(self.model_name_tex(idx), line_height)
         x0 = (footer.shape[1] - name_tex.shape[1]) // 2
-        footer[0:line_height, x0:x0+name_tex.shape[1]] = name_tex
+        footer[0:line_height, x0 : x0 + name_tex.shape[1]] = name_tex
 
         metric_tex = self.latex_rgba(self.metric_lines(idx)[0], line_height)
         x1 = (footer.shape[1] - metric_tex.shape[1]) // 2
-        footer[line_height:line_height*2, x1:x1+metric_tex.shape[1]] = metric_tex
+        footer[line_height : line_height * 2, x1 : x1 + metric_tex.shape[1]] = metric_tex
 
         return footer
 
-
     def overlay_enlarged_patch(self, patch):
         h, w, _ = patch.shape
-        cropped = patch[0:self.patch_crop_h, 0:self.patch_crop_w, :]
+        cropped = patch[0 : self.patch_crop_h, 0 : self.patch_crop_w, :]
 
-        orig_patch = patch[self.patch_y:self.patch_y+self.patch_size,
-                           self.patch_x:self.patch_x+self.patch_size]
+        orig_patch = patch[self.patch_y : self.patch_y + self.patch_size, self.patch_x : self.patch_x + self.patch_size]
         orig_patch = np.ascontiguousarray(orig_patch)
-
-        enlarged = cv2.resize(orig_patch,
-                              (int(self.patch_size*self.scale), int(self.patch_size*self.scale)),
-                              interpolation=cv2.INTER_NEAREST)
-
-        eh, ew, _ = enlarged.shape
-        ph, pw, _ = cropped.shape
-
-        ix = max(0, pw - ew - self.border // 2)
-        iy = max(0, ph - eh - self.border // 2)
-
-        cropped[iy:iy+eh, ix:ix+ew] = enlarged
-
-        return cropped
-
-    def render_gt_plain(self, full_img):
-        cropped = full_img[0:self.patch_crop_h, self.offset_x:self.patch_crop_w + self.offset_x, :]
-        cropped = np.ascontiguousarray(cropped)
-
-        rx = self.patch_x - self.offset_x
-        ry = self.patch_y
-        cv2.rectangle(cropped, (rx, ry), (rx+self.patch_size, ry+self.patch_size),
-                    self.color, self.border)
-
-        orig_patch = full_img[
-            self.patch_y:self.patch_y+self.patch_size,
-            self.patch_x:self.patch_x+self.patch_size
-        ]
 
         enlarged = cv2.resize(
             orig_patch,
-            (int(self.patch_size*self.scale_gt), int(self.patch_size*self.scale_gt)),
-            interpolation=cv2.INTER_NEAREST
+            (int(self.patch_size * self.scale), int(self.patch_size * self.scale)),
+            interpolation=cv2.INTER_NEAREST,
         )
 
         eh, ew, _ = enlarged.shape
@@ -140,11 +112,37 @@ class BenchmarkPlotter:
         ix = max(0, pw - ew - self.border // 2)
         iy = max(0, ph - eh - self.border // 2)
 
-        cropped[iy:iy+eh, ix:ix+ew] = enlarged
-        cv2.rectangle(cropped, (ix, iy), (ix+ew, iy+eh), self.color, self.border)
-        cv2.line(cropped,
-                (rx+self.patch_size, ry+self.patch_size),
-                (ix, iy), self.color, self.border)
+        cropped[iy : iy + eh, ix : ix + ew] = enlarged
+
+        return cropped
+
+    def render_gt_plain(self, full_img):
+        cropped = full_img[0 : self.patch_crop_h, self.offset_x : self.patch_crop_w + self.offset_x, :]
+        cropped = np.ascontiguousarray(cropped)
+
+        rx = self.patch_x - self.offset_x
+        ry = self.patch_y
+        cv2.rectangle(cropped, (rx, ry), (rx + self.patch_size, ry + self.patch_size), self.color, self.border)
+
+        orig_patch = full_img[
+            self.patch_y : self.patch_y + self.patch_size, self.patch_x : self.patch_x + self.patch_size
+        ]
+
+        enlarged = cv2.resize(
+            orig_patch,
+            (int(self.patch_size * self.scale_gt), int(self.patch_size * self.scale_gt)),
+            interpolation=cv2.INTER_NEAREST,
+        )
+
+        eh, ew, _ = enlarged.shape
+        ph, pw, _ = cropped.shape
+
+        ix = max(0, pw - ew - self.border // 2)
+        iy = max(0, ph - eh - self.border // 2)
+
+        cropped[iy : iy + eh, ix : ix + ew] = enlarged
+        cv2.rectangle(cropped, (ix, iy), (ix + ew, iy + eh), self.color, self.border)
+        cv2.line(cropped, (rx + self.patch_size, ry + self.patch_size), (ix, iy), self.color, self.border)
 
         cropped_rgba = cv2.cvtColor(cropped, cv2.COLOR_BGR2BGRA)
         cropped_rgba[:, :, 3] = 255
@@ -156,14 +154,13 @@ class BenchmarkPlotter:
         footer = np.zeros((footer_height, cropped_rgba.shape[1], 4), dtype=np.uint8)
 
         x0 = (footer.shape[1] - name_tex.shape[1]) // 2
-        footer[0:self.text_px_small, x0:x0+name_tex.shape[1]] = name_tex
+        footer[0 : self.text_px_small, x0 : x0 + name_tex.shape[1]] = name_tex
 
         x1 = (footer.shape[1] - metric_tex.shape[1]) // 2
-        footer[self.text_px_small:self.text_px_small*2, x1:x1+metric_tex.shape[1]] = metric_tex
+        footer[self.text_px_small : self.text_px_small * 2, x1 : x1 + metric_tex.shape[1]] = metric_tex
 
         final = np.vstack([cropped_rgba, footer])
         return final
-
 
     def render_gt_scaled(self, full_img):
         full_img = np.ascontiguousarray(full_img.astype(np.uint8))
@@ -176,28 +173,27 @@ class BenchmarkPlotter:
 
         footer = np.zeros((self.text_px * 2, cropped_rgba.shape[1], 4), dtype=np.uint8)
         x0 = (footer.shape[1] - name_tex.shape[1]) // 2
-        footer[0:self.text_px, x0:x0+name_tex.shape[1]] = name_tex
+        footer[0 : self.text_px, x0 : x0 + name_tex.shape[1]] = name_tex
         x1 = (footer.shape[1] - metric_tex.shape[1]) // 2
-        footer[self.text_px:self.text_px*2, x1:x1+metric_tex.shape[1]] = metric_tex
+        footer[self.text_px : self.text_px * 2, x1 : x1 + metric_tex.shape[1]] = metric_tex
 
         final = np.vstack([cropped_rgba, footer])
         return final
 
-
     def metric_lines(self, idx):
         if idx == 0:
             return [r"$\mathbf{(MSE\ /\ PSNR\ /\ SSIM)}$"]
-        m = self.pred_metrics[idx-1]
+        m = self.pred_metrics[idx - 1]
         return [rf"$\mathbf{{{m.mse:.2f}\ /\ {m.psnr:.2f}\ /\ {m.ssim:.2f}}}$"]
 
     def model_name_tex(self, idx):
         if idx == 0:
             return r"$\mathbf{HR\ Ground\ Truth}$"
-        name = MODEL_NAMES_MAP.get(self.model_names[idx-1], self.model_names[idx-1])
+        name = MODEL_NAMES_MAP.get(self.model_names[idx - 1], self.model_names[idx - 1])
         name = name.replace("_", r"\_").replace(" ", r"\ ")
         return rf"$\mathbf{{{name}}}$"
 
-# ---===== DIFF SUPPORT =====--- 
+    # ---===== DIFF SUPPORT =====---
 
     def compute_global_diff_maps(self, hr_full, pred_full_list):
         hr_gray = cv2.cvtColor(hr_full, cv2.COLOR_BGR2GRAY).astype(np.float32)
@@ -215,17 +211,16 @@ class BenchmarkPlotter:
 
     def overlay_enlarged_patch_diff(self, full_img, diff_img):
         h, w, _ = full_img.shape
-        cropped = full_img[0:self.patch_crop_h, self.offset_x:self.patch_crop_w + self.offset_x, :].copy()
+        cropped = full_img[0 : self.patch_crop_h, self.offset_x : self.patch_crop_w + self.offset_x, :].copy()
 
         orig_patch_diff = diff_img[
-            self.patch_y:self.patch_y+self.patch_size,
-            self.patch_x:self.patch_x+self.patch_size
+            self.patch_y : self.patch_y + self.patch_size, self.patch_x : self.patch_x + self.patch_size
         ]
 
         enlarged = cv2.resize(
             orig_patch_diff,
-            (int(self.patch_size*self.scale), int(self.patch_size*self.scale)),
-            interpolation=cv2.INTER_NEAREST
+            (int(self.patch_size * self.scale), int(self.patch_size * self.scale)),
+            interpolation=cv2.INTER_NEAREST,
         )
 
         eh, ew, _ = enlarged.shape
@@ -234,15 +229,15 @@ class BenchmarkPlotter:
         ix = max(0, pw - ew - self.border // 2)
         iy = max(0, ph - eh - self.border // 2)
 
-        cropped[iy:iy+eh, ix:ix+ew] = enlarged
+        cropped[iy : iy + eh, ix : ix + ew] = enlarged
 
         # cv2.rectangle(cropped, (ix, iy), (ix+ew, iy+eh), self.color, self.border)
 
         # rx = self.patch_x
         # ry = self.patch_y
-        
+
         # print(rx, ry)
-        
+
         # cv2.rectangle(cropped, (rx, ry),
         #             (rx+self.patch_size, ry+self.patch_size),
         #             self.color, self.border)
@@ -252,7 +247,6 @@ class BenchmarkPlotter:
         #         (ix, iy), self.color, self.border)
 
         return cropped
-
 
     def render_normal(self, idx, full_img, show_footer=True):
         full_img = np.ascontiguousarray(full_img.astype(np.uint8))
@@ -264,7 +258,6 @@ class BenchmarkPlotter:
             footer = self.draw_footer(img, idx)
             img = np.vstack([img, footer])
         return img
-
 
     def render_diff(self, idx, full_img, full_diff, show_footer=True):
         full_img = np.ascontiguousarray(full_img.astype(np.uint8))

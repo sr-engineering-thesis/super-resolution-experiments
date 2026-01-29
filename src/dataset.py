@@ -44,7 +44,7 @@ class QuakeDataset(torch.utils.data.Dataset):
         hr_crop = hr_tensor[
             :,
             top * self.scale : top * self.scale + ps * self.scale,
-            left * self.scale : left * self.scale + ps * self.scale
+            left * self.scale : left * self.scale + ps * self.scale,
         ]
 
         return lr_crop, hr_crop

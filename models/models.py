@@ -1,3 +1,7 @@
+# Experiments have been performed using TorchSR library
+# ->   https://github.com/Coloquinte/torchSR
+# ->   https://github.com/Coloquinte/torchSR/blob/main/doc/NinaSR.md
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional

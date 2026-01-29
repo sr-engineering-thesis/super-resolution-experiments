@@ -1,8 +1,9 @@
-import torch
-from constants import TEST_LR_DATA_PATH, TEST_HR_DATA_PATH, RESULTS_DIR_PATH
 import cv2
 import numpy as np
+import torch
 from torchvision.transforms.functional import to_tensor
+
+from constants import RESULTS_DIR_PATH, TEST_HR_DATA_PATH, TEST_LR_DATA_PATH
 
 IMAGES_INDICES = [949, 1819]
 

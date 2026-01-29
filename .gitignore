@@ -17,3 +17,5 @@ results/
 slurm*
 logs/
 plots/
+multirun
+outputs

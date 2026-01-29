@@ -58,7 +58,7 @@ class SRModelWrapper(ABC):
 
 
 class TorchInterpolationWrapper(SRModelWrapper):
-    MODES = {"bilinear_torch": "bilinear", "bicubic_torch": "bicubic"}
+    MODES = {"bilinear_torch": "bilinear", "bicubic_torch": "bicubic", "nearest_torch": "nearest"}
 
     def _build_model(self):
         mode_name = self.config.name.lower()
@@ -81,6 +81,7 @@ class CV2InterpolationWrapper(SRModelWrapper):
     MODES = {
         "bilinear": cv2.INTER_LINEAR,
         "bicubic": cv2.INTER_CUBIC,
+        "lanczos": cv2.INTER_LANCZOS4,
     }
 
     def _build_model(self):
@@ -137,6 +138,11 @@ class TorchSRWrapper(SRModelWrapper):
 class CustomTorchWrapper(SRModelWrapper):
     MODEL_CLASSES = {
         "fsrcnn_big": FSRCNN_BIG_PRETRAIN,
+        "fsrcnn_big_vgg": FSRCNN_BIG_PRETRAIN,
+        "fsrcnn_big_fourier": FSRCNN_BIG_PRETRAIN,
+        "fsrcnn_big_sobel": FSRCNN_BIG_PRETRAIN,
+        "fsrcnn_big_mse": FSRCNN_BIG_PRETRAIN,
+        "fsrcnn_big_mae": FSRCNN_BIG_PRETRAIN,
         "fsrcnn_small": FSRCNN_SMALL_PRETRAIN,
         "fsrcnn_without": FSRCNN_WITHOUT_PRETRAIN,
     }
@@ -166,6 +172,7 @@ class ModelFactory:
     WRAPPER_MAP = {
         "bilinear": CV2InterpolationWrapper,
         "bicubic": CV2InterpolationWrapper,
+        "lanczos": CV2InterpolationWrapper,
         "carn": TorchSRWrapper,
         "ninasr_b0": TorchSRWrapper,
         "fsrcnn_big": CustomTorchWrapper,
@@ -179,6 +186,12 @@ class ModelFactory:
         "fsrcnn_without": CustomTorchWrapper,
         "bilinear_torch": TorchInterpolationWrapper,
         "bicubic_torch": TorchInterpolationWrapper,
+        "nearest_torch": TorchInterpolationWrapper,
+        "fsrcnn_big_vgg": CustomTorchWrapper,
+        "fsrcnn_big_fourier": CustomTorchWrapper,
+        "fsrcnn_big_sobel": CustomTorchWrapper,
+        "fsrcnn_big_mse": CustomTorchWrapper,
+        "fsrcnn_big_mae": CustomTorchWrapper,
     }
 
     @staticmethod

@@ -1,61 +1,16 @@
 import datetime
+import os
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torchvision.models as models
 from omegaconf import DictConfig
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from torch.utils.data import DataLoader
 
 from src.logger import logger
+from src.losses import get_loss_function
 from src.metrics import Metrics, batch_metrics
-
-
-class VGGFeatureExtractor(nn.Module):
-    def __init__(self, layers=("relu3_3",), use_input_norm=True):
-        super().__init__()
-        vgg_pretrained = models.vgg19(weights=models.VGG19_Weights.IMAGENET1K_V1).features.eval()
-        self.layers = layers
-        self.use_input_norm = use_input_norm
-
-        if use_input_norm:
-            mean = torch.Tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
-            std = torch.Tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
-            self.register_buffer("mean", mean)
-            self.register_buffer("std", std)
-
-        self.vgg_layers = nn.ModuleDict()
-        layer_map = {
-            "relu1_1": 1,
-            "relu1_2": 3,
-            "relu2_1": 6,
-            "relu2_2": 8,
-            "relu3_1": 11,
-            "relu3_2": 13,
-            "relu3_3": 15,
-            "relu3_4": 17,
-            "relu4_1": 20,
-            "relu4_2": 22,
-            "relu4_3": 24,
-            "relu4_4": 26,
-            "relu5_1": 29,
-            "relu5_2": 31,
-            "relu5_3": 33,
-            "relu5_4": 35,
-        }
-
-        for name in layers:
-            self.vgg_layers[name] = nn.Sequential(*[vgg_pretrained[x] for x in range(layer_map[name] + 1)])
-
-        for param in self.parameters():
-            param.requires_grad = False
-
-    def forward(self, x):
-        if self.use_input_norm:
-            x = (x - self.mean) / self.std
-        features = {name: self.vgg_layers[name](x) for name in self.layers}
-        return features
 
 
 class Trainer:
@@ -66,6 +21,7 @@ class Trainer:
         val_loader: DataLoader,
         config: DictConfig,
         experiment_tracker=None,
+        run_dir: str = "",
     ):
         self.device = config.training.device
         self.model = model.to(self.device)
@@ -73,17 +29,54 @@ class Trainer:
         self.val_loader = val_loader
         self.config = config
         self.experiment_tracker = experiment_tracker
+        self.run_dir = run_dir
+        # self.initial_loss = config.training.loss_scales.get(config.training.loss, 1.0)
+        self.initial_loss = None
+        os.makedirs(self.run_dir, exist_ok=True)
 
-        self.criterion = nn.L1Loss()
-        # self.vgg_criterion = nn.L1Loss()
-        # self.vgg_extractor = VGGFeatureExtractor(layers=("relu3_3",)).to(self.device)
+        self.val_metrics = os.path.join(self.run_dir, "val_metrics.csv")
+        self.train_metrics = os.path.join(self.run_dir, "train_metrics.csv")
+        with open(self.val_metrics, "w") as f:
+            f.write("epoch,loss,mse,psnr,ssim\n")
 
-        self.optimizer = optim.AdamW(
-            self.model.parameters(),
-            lr=config.training.optimizer.lr,
-            weight_decay=config.training.optimizer.weight_decay,
+        with open(self.train_metrics, "w") as f:
+            f.write("epoch,loss,mse,psnr,ssim\n")
+
+        self.criterion: nn.Module = get_loss_function(config.training.loss, use_scaling=config.training.use_scaling).to(
+            self.device
         )
-        # self.scheduler = CosineAnnealingWarmRestarts(self.optimizer, T_0=10, T_mult=2, eta_min=1e-7)
+
+        if config.training.optimizer.type == "adamw":
+            self.optimizer = optim.AdamW(
+                self.model.parameters(),
+                lr=config.training.optimizer.lr,
+                weight_decay=config.training.optimizer.weight_decay,
+            )
+        elif config.training.optimizer.type == "sgd":
+            self.optimizer = optim.SGD(
+                self.model.parameters(),
+                lr=config.training.optimizer.lr,
+                momentum=0.9,
+                weight_decay=config.training.optimizer.weight_decay,
+            )
+        else:
+            logger.warning("Unknown optimizer type specified. Defaulting to AdamW.")
+            self.optimizer = optim.AdamW(
+                self.model.parameters(),
+                lr=config.training.optimizer.lr,
+                weight_decay=config.training.optimizer.weight_decay,
+            )
+
+        if config.training.scheduler.type == "cosine_annealing_warm_restarts":
+            self.scheduler = CosineAnnealingWarmRestarts(
+                self.optimizer,
+                T_0=config.training.scheduler.T_0,
+                T_mult=config.training.scheduler.T_mult,
+                eta_min=config.training.scheduler.eta_min,
+            )
+        else:
+            logger.warning("No scheduler or unknown scheduler type specified. Continuing without scheduler.")
+            self.scheduler = None
 
         self.epochs = config.training.max_epochs
         self.patience = config.training.patience
@@ -97,24 +90,18 @@ class Trainer:
         sr = self.model(lr)
         loss_pixel = self.criterion(sr, hr)
 
-        # sr_features = self.vgg_extractor(sr)
-        # hr_features = self.vgg_extractor(hr)
-        # loss_vgg = sum(self.vgg_criterion(sr_features[k], hr_features[k]) for k in sr_features)
+        # if self.initial_loss is None:
+        #     logger.info(f"Setting initial loss scale for {self.config.training.loss} loss: {self.config.training.loss_scales[self.config.training.loss]}")
+        #     self.initial_loss = self.config.training.loss_scales[self.config.training.loss]
 
-        # total_loss = loss_pixel + 0.21 * loss_vgg
-        total_loss = loss_pixel
-        # abs(sobel_hr - sobel_pred) * 0.5  
-        # total_loss = loss + loss_sobel
+        # loss_pixel = loss_pixel / self.initial_loss
+
         self.optimizer.zero_grad()
-        total_loss.backward()
+        loss_pixel.backward()
+        torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
         self.optimizer.step()
 
-        # Logging
-        logger.info(f"Step loss: {total_loss.item():.6f}")
-        if self.experiment_tracker:
-            self.experiment_tracker.track(total_loss.item(), name="train/loss", epoch=self.epochs_no_improve)
-
-        return total_loss.item()
+        return loss_pixel.item()
 
     def val_step(self, batch: tuple[torch.Tensor, torch.Tensor]) -> float:
         lr, hr = batch
@@ -122,10 +109,6 @@ class Trainer:
 
         sr = self.model(lr)
         loss = self.criterion(sr, hr)
-
-        logger.info(f"Validation step loss: {loss.item():.6f}")
-        if self.experiment_tracker:
-            self.experiment_tracker.track(loss.item(), name="val/loss", epoch=self.epochs_no_improve)
 
         return loss.item()
 
@@ -168,6 +151,11 @@ class Trainer:
                 self.experiment_tracker.track(avg_train_metrics.psnr, name="train/avg_psnr", epoch=epoch)
                 self.experiment_tracker.track(avg_train_metrics.ssim, name="train/avg_ssim", epoch=epoch)
 
+            with open(self.train_metrics, "a") as f:
+                f.write(
+                    f"{epoch},{avg_train_loss:.8f},{avg_train_metrics.mse:.4f},{avg_train_metrics.psnr:.4f},{avg_train_metrics.ssim:.4f}\n"
+                )
+
             # Validation
             self.model.eval()
             epoch_val_loss = 0.0
@@ -200,13 +188,20 @@ class Trainer:
                 f"PSNR: {avg_val_metrics.psnr:.4f}, SSIM: {avg_val_metrics.ssim:.4f}"
             )
 
+            with open(self.val_metrics, "a") as f:
+                f.write(
+                    f"{epoch},{avg_val_loss:.8f},{avg_val_metrics.mse:.4f},{avg_val_metrics.psnr:.4f},{avg_val_metrics.ssim:.4f}\n"
+                )
+
             if self.experiment_tracker:
                 self.experiment_tracker.track(avg_val_loss, name="val/avg_loss", epoch=epoch)
                 self.experiment_tracker.track(avg_val_metrics.mse, name="val/avg_mse", epoch=epoch)
                 self.experiment_tracker.track(avg_val_metrics.psnr, name="val/avg_psnr", epoch=epoch)
                 self.experiment_tracker.track(avg_val_metrics.ssim, name="val/avg_ssim", epoch=epoch)
 
-            # self.scheduler.step()
+            if self.scheduler is not None:
+                self.scheduler.step()
+
             for i, param_group in enumerate(self.optimizer.param_groups):
                 lr = param_group["lr"]
                 logger.info(f"Epoch {epoch} - Optimizer group {i} LR: {lr:.6f}")
@@ -219,7 +214,9 @@ class Trainer:
                 self.epochs_no_improve = 0
                 torch.save(
                     self.model.state_dict(),
-                    f"checkpoints/best_model_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.pth",
+                    os.path.join(
+                        self.run_dir, f"checkpoints/best_model_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.pth"
+                    ),
                 )
                 logger.info(f"Validation improved. Model saved. Best Val Loss: {self.best_val_loss:.6f}")
             else:
@@ -228,3 +225,4 @@ class Trainer:
                 if self.epochs_no_improve >= self.patience:
                     logger.info(f"Early stopping triggered at epoch {epoch}.")
                     break
+        return self.best_val_loss

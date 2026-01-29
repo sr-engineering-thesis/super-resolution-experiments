@@ -115,7 +115,7 @@ class SRVisualizer:
 
         return np.vstack(spaced_rows)
 
-    def load_images(self, idx=108):
+    def load_images(self, idx=111):
         hr_path = os.path.join(self.hr_dir, f"{idx}.png")
         lr_path = os.path.join(self.lr_dir, f"{idx}.png")
         hr_image = cv2.imread(hr_path)
@@ -169,8 +169,8 @@ class SRVisualizer:
 
         return diff_patches
 
-    def run_models(self, models: List[Callable[[torch.Tensor], torch.Tensor]]):
-        hr_image, lr_image = self.load_images()
+    def run_models(self, models: List[Callable[[torch.Tensor], torch.Tensor]], image_idx: int = 108):
+        hr_image, lr_image = self.load_images(image_idx)
         hr_tensor = self.to_tensor(hr_image)
         hr_np = (hr_tensor.numpy() * 255.0).clip(0, 255).astype(np.uint8)
         hr_np = np.transpose(hr_np, (1, 2, 0))
@@ -182,6 +182,7 @@ class SRVisualizer:
 
         pred_patches = []
         pred_metrics = []
+        pred_images = []
 
         for model in models:
             with torch.no_grad():
@@ -190,8 +191,10 @@ class SRVisualizer:
             pred_metrics.append(Metrics().calc(hr_image, output))
             x, y = self.crop_coords
             pred_patches.append(output[y : y + 128, x : x + 128])
+            pred_images.append(output)
 
-        return gt_patch, pred_patches, pred_metrics
+        return hr_np, pred_images, pred_metrics
+
 
     def plot_results(self, gt_patch, pred_patches, pred_metrics, pred_names: List[str], out_prefix="output"):
         lr_patches = {"HR (Ground Truth)": gt_patch}

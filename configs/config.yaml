@@ -1,28 +1,33 @@
 debug: True
-
+output_dir: ""
+# python -m experiments.fsrcnn_finetune -m training.loss=mae,mse,sobel,fourier
 training:
-  device: 'cuda'
-  scale: 4
+  device: "cuda"
+  scale: 2
   max_epochs: 200
-  patience: 15
+  patience: 20
+  loss: "sobel" # "mae" | "mse" | "sobel" | "fourier" | "vgg_perceptual"
+  use_scaling: False
   optimizer:
-    lr: 3e-4
+    type: "adamw" # "adamw" | "sgd"
+    lr: 1e-4
     weight_decay: 1e-4
-  # scheduler:
-  #   warmup_steps: 1000
-  #   gamma: 0.5
-  #   step_size: 10000
   scheduler:
-    type: 'cosine_warm_restarts'
-    T_0: 10
-    T_mult: 2
-    eta_min: 1e-7
-    
+    type: "cosine_annealing_warm_restarts"
+    T_0: 25
+    T_mult: 1
+    eta_min: 1e-6
+  loss_scales:
+    mae: 0.00453282
+    mse: 0.00007101
+    sobel: 0.01959570
+    fourier: 0.75516648
+    vgg_perceptual: 0.73848135
 
 train_dataloader:
   batch_size: 32
   shuffle: True
-  num_workers: 16
+  num_workers: 8
   pin_memory: True
   prefetch_factor: 2
   persistent_workers: True
@@ -31,7 +36,7 @@ train_dataloader:
 val_dataloader:
   batch_size: 32
   shuffle: False
-  num_workers: 16
+  num_workers: 8
   pin_memory: True
   prefetch_factor: 2
   persistent_workers: True
@@ -49,15 +54,22 @@ test_dataloader:
 data:
   patch_size: 64
   train:
-    x: '/mnt/local/rs/train/lr_x4'
-    y: '/mnt/local/rs/train/hr'
+    x: "/tmp/data_sr/train/lr"
+    y: "/tmp/data_sr/train/hr"
+    pt_file: "tmp/data_sr/quake_dataset_train.pt"
   test:
-    x: '/mnt/local/rs/test/lr_x4'
-    y: '/mnt/local/rs/test/hr'
+    x: "data/test/lr"
+    y: "data/test/hr"
   val:
-    x: '/mnt/local/rs/val/lr_x4'
-    y: '/mnt/local/rs/val/hr'
-
-
+    x: "/tmp/data/val/lr"
+    y: "/tmp/data/val/hr"
+    pt_file: "tmp/data_sr/quake_dataset_val.pt"
 plotting:
-  dir: 'plots'
+  dir: "plots"
+
+hydra:
+  run:
+    dir: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S-%f}
+  sweep:
+    dir: multirun/${now:%Y-%m-%d}/${now:%H-%M-%S-%f}
+    subdir: ${hydra.job.num}

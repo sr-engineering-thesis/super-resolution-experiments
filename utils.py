@@ -5,13 +5,7 @@ import shutil
 from pathlib import Path
 
 import cv2
-import numpy as np
-import torch
 from tqdm import tqdm
-
-
-
-
 
 def generate_2x_lr_dataset_color(hr_dir: str, lr_dir: str, scale: int = 2):
     image_files = [f for f in os.listdir(hr_dir) if f.lower().endswith(".png")]

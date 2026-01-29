@@ -1,16 +1,18 @@
-from torchvision.transforms.functional import to_tensor
-from torch.utils.data import Dataset
-import random
-from sklearn.model_selection import train_test_split
 import os
+import random
+
 import cv2
+from sklearn.model_selection import train_test_split
+from torch.utils.data import Dataset
+from torchvision.transforms import Compose, GaussianBlur, RandomApply
+from torchvision.transforms.functional import to_tensor
+
 from constants import (
-    TRAIN_HR_DATA_PATH,
-    TRAIN_LR_DATA_PATH,
     TEST_HR_DATA_PATH,
     TEST_LR_DATA_PATH,
+    TRAIN_HR_DATA_PATH,
+    TRAIN_LR_DATA_PATH,
 )
-from torchvision.transforms import GaussianBlur, Compose, RandomApply
 
 
 class QuakeDataset(Dataset):

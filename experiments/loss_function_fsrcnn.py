@@ -11,6 +11,7 @@ from src.dataset import QuakeDataset
 from src.logger import setup_aim_logger
 from src.trainer import Trainer
 
+
 @main(config_path="../configs", config_name="config", version_base="1.3")
 def train_fsrcnn(config: DictConfig):
     output_dir = HydraConfig.get().runtime.output_dir

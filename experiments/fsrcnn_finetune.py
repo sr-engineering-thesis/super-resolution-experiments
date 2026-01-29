@@ -24,7 +24,7 @@ def train_fsrcnn(config: DictConfig):
     output_dir = config.get("output_dir", "outputs")
     os.makedirs(os.path.join(output_dir, "checkpoints"), exist_ok=True)
 
-    # experiment_tracker = setup_aim_logger("optuna_check_fsrcnn_v2", config)
+    experiment_tracker = setup_aim_logger("optuna_check_fsrcnn_v2", config)
 
     train_dataset = QuakeDataset(config, split="train")
     train_dataloader = DataLoader(train_dataset, **config.train_dataloader)
@@ -40,7 +40,7 @@ def train_fsrcnn(config: DictConfig):
         train_loader=train_dataloader,
         val_loader=val_dataloader,
         config=config,
-        experiment_tracker=None,
+        experiment_tracker=experiment_tracker,
         run_dir=output_dir,
     )
 

@@ -1,6 +1,5 @@
 import optuna
 from hydra import compose, initialize
-from omegaconf import OmegaConf
 
 from experiments.fsrcnn_finetune import train_fsrcnn
 

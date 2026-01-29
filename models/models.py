@@ -12,7 +12,7 @@ import torch
 import torch.nn.functional as F
 from torchsr.models import carn, carn_m, edsr_r16f64, edsr_r32f256, ninasr_b0, rcan
 
-from experiments.ninasr_julia import NinaSR
+from experiments.ninasr_sm_finetune import NinaSR
 from models.fsrcnn.fsrcnn import FSRCNN_BIG_PRETRAIN, FSRCNN_SMALL_PRETRAIN, FSRCNN_WITHOUT_PRETRAIN
 
 
